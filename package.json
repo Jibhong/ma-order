@@ -1,10 +1,14 @@
 {
-  "name": "my-app",
+  "name": "ma-order",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Local-first English and Thai stock management",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Jibhong",
+  "homepage": "https://github.com/Jibhong/ma-order",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jibhong/ma-order.git"
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -22,7 +26,8 @@
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
-    "@electron-toolkit/utils": "^4.0.0"
+    "@electron-toolkit/utils": "^4.0.0",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.1",
@@ -44,5 +49,8 @@
     "react-dom": "^19.3.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.4"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true
   }
 }
