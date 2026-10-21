@@ -332,6 +332,22 @@ function App(): React.JSX.Element {
     () => (state?.items ?? []).filter((item) => item.locationId === activeLocationId),
     [activeLocationId, state?.items],
   )
+  const exactItem = activeItems.find(
+    (item) => item.name.trim().toLocaleLowerCase() === query.trim().toLocaleLowerCase(),
+  )
+  const canon = (s: string): string =>
+    s.toLowerCase().replace(/[^\p{L}\p{M}]/gu, "") + s.replace(/[^\p{N}]/gu, "")
+  const fuse = useMemo(
+    () =>
+      new Fuse(
+        activeItems.map((item) => ({ item, key: canon(item.name) })),
+        { keys: ["key"], threshold: 1, ignoreLocation: true },
+      ),
+    [activeItems],
+  )
+  const searchMatches = query.trim()
+    ? fuse.search(canon(query)).map((r) => r.item.item)
+    : activeItems
   const filteredItems = useMemo(() => {
     const items = (state?.items ?? []).filter(
       (item) =>
@@ -348,7 +364,13 @@ function App(): React.JSX.Element {
           (stockFilter === "in-stock" && item.quantity > 0) ||
           (stockFilter === "out-of-stock" && item.quantity === 0)),
     )
+    const relevance = new Map(searchMatches.map((item, index) => [item.id, index]))
     return items.sort((left, right) => {
+      if (query.trim()) {
+        const leftRank = relevance.get(left.id) ?? Number.POSITIVE_INFINITY
+        const rightRank = relevance.get(right.id) ?? Number.POSITIVE_INFINITY
+        if (leftRank !== rightRank) return leftRank - rightRank
+      }
       switch (sortMode) {
         case "name-desc":
           return right.name.localeCompare(left.name)
@@ -365,6 +387,7 @@ function App(): React.JSX.Element {
     query,
     quantityComparator,
     quantityTarget,
+    searchMatches,
     sortMode,
     state?.items,
     stockFilter,
@@ -387,23 +410,6 @@ function App(): React.JSX.Element {
       ),
     [activeLocationId, query, state?.movements],
   )
-  const exactItem = activeItems.find(
-    (item) => item.name.trim().toLocaleLowerCase() === query.trim().toLocaleLowerCase(),
-  )
-
-  const canon = (s: string): string =>
-    s.toLowerCase().replace(/[^\p{L}\p{M}]/gu, "") + s.replace(/[^\p{N}]/gu, "")
-  const fuse = useMemo(
-    () =>
-      new Fuse(
-        activeItems.map((item) => ({ item, key: canon(item.name) })),
-        { keys: ["key"], threshold: 1, ignoreLocation: true },
-      ),
-    [activeItems],
-  )
-  const searchMatches = query.trim()
-    ? fuse.search(canon(query)).map((r) => r.item.item)
-    : activeItems
   const similarItems = query.trim() && !exactItem ? searchMatches.slice(0, 10) : []
   const totalUnits = activeItems.reduce((total, item) => total + item.quantity, 0)
   const visibleItemPage = Math.min(

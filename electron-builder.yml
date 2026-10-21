@@ -42,3 +42,4 @@ publish:
   provider: github
   owner: Jibhong
   repo: ma-order
+  releaseType: release

@@ -22,24 +22,9 @@ npm run dev
 
 ## Build and publish updates
 
-The app version shown in Settings comes from `package.json` (currently `1.0.0`). To publish a Windows update:
+The app version shown in Settings comes from `package.json`. To publish a Windows update, run `build.bat` from a clean Git working tree. The script prompts for the release version and a GitHub token with permission to publish releases in `Jibhong/ma-order`, then builds and publishes the installer and updater metadata together. It uses one published GitHub release per version and, when refreshing a release for the same tagged commit, removes duplicate releases only after verifying the kept release has both the setup installer and `latest.yml`. Do not create a separate GitHub release or run electron-builder publishing separately for the same version.
 
-1. Bump the version, for example `npm version patch` (this changes `package.json` and `package-lock.json` and creates a Git tag; push the commit and tag).
-2. Set `GH_TOKEN` to a GitHub token with permission to create releases and upload assets to `Jibhong/ma-order`. In PowerShell:
-
-   ```powershell
-   $env:GH_TOKEN = "YOUR_GITHUB_TOKEN"
-   ```
-
-3. Build the app and publish the installer/update metadata:
-
-   ```powershell
-   npm run build
-   npx electron-builder --win --publish always
-   ```
-
-4. If electron-builder creates a draft release, review its assets and publish it. Keep the generated installer, `.blockmap`, and `latest.yml` assets attached to the release; the updater uses the metadata and installer assets to find and install the update.
-5. Install and open the new version, then use **Check for updates** in the installed older app. Update checks do not work in development mode.
+Install and open the new version, then use **Check for updates** in the installed older app. Update checks do not work in development mode.
 
 For a manually prepared GitHub release, use the exact `v`-prefixed tag matching the bumped package version (for example, `v1.0.1`) and upload the updater-compatible assets produced by electron-builder. A release containing only source code or a setup installer without `latest.yml` will not provide the required auto-update metadata.
 
