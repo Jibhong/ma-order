@@ -22,7 +22,7 @@ npm run dev
 
 ## Build and publish updates
 
-The app version shown in Settings comes from `package.json`. To publish a Windows update, run `build.bat` from a clean Git working tree. The script prompts for the release version and a GitHub token with permission to publish releases in `Jibhong/ma-order`, then builds and publishes the installer and updater metadata together. It uses one published GitHub release per version and, when refreshing a release for the same tagged commit, removes duplicate releases only after verifying the kept release has both the setup installer and `latest.yml`. Do not create a separate GitHub release or run electron-builder publishing separately for the same version.
+The app version shown in Settings comes from `package.json`. To publish a Windows update, run `build.bat` from a clean Git working tree. The script prompts for the release version and a GitHub token with permission to publish releases in `Jibhong/ma-order`, builds the installer and updater metadata locally, then uploads the installer, blockmap, and `latest.yml` to the same GitHub release. It verifies all three assets before removing duplicate releases. Existing same-version tags are reused without moving them, so the script can repair an incomplete release. Do not create a separate GitHub release or run electron-builder publishing separately for the same version.
 
 Install and open the new version, then use **Check for updates** in the installed older app. Update checks do not work in development mode.
 

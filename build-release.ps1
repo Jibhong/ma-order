@@ -34,6 +34,24 @@ function Invoke-GitHubApi {
   Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
 }
 
+function Upload-GitHubReleaseAsset {
+  param(
+    [Parameter(Mandatory = $true)][object]$Release,
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Name
+  )
+
+  $headers = @{
+    Authorization = "Bearer $githubToken"
+    Accept = "application/vnd.github+json"
+    "X-GitHub-Api-Version" = "2022-11-28"
+    "User-Agent" = "ma-order-release-script"
+  }
+  $uploadUrl = ([string]$Release.upload_url -replace '\{\?name,label\}$', '') + "?name=$Name"
+  Invoke-RestMethod -Method Post -Uri $uploadUrl -Headers $headers `
+    -ContentType "application/octet-stream" -InFile $Path -TimeoutSec 900
+}
+
 function Get-GitHubReleases {
   $releases = @()
   $page = 1
@@ -85,16 +103,7 @@ if ($remoteTag) {
   if ($version -ne $currentVersion) {
     throw "Release tag $tag already exists on GitHub. Choose a newer version."
   }
-  $tagLine = $remoteTag | Where-Object { $_ -match '\srefs/tags/.+\^\{\}$' } | Select-Object -First 1
-  if (-not $tagLine) {
-    $tagLine = $remoteTag | Select-Object -First 1
-  }
-  $remoteTagCommit = ($tagLine -split '\s+')[0]
-  $headCommit = (& git rev-parse HEAD).Trim()
-  if ($LASTEXITCODE -ne 0 -or $remoteTagCommit -ne $headCommit) {
-    throw "Release tag $tag already exists on a different commit. Choose a newer version."
-  }
-  Write-Host "Release tag $tag already points to this commit. The release assets will be refreshed."
+  Write-Host "Release tag $tag already exists on GitHub. It will not be moved; its assets will be refreshed."
 }
 if ($existingTag -and -not $remoteTag) {
   Write-Host "Local-only tag $tag found. It will be moved to the release commit."
@@ -153,33 +162,78 @@ if (-not $remoteTag) {
   Invoke-CheckedCommand "git.exe" @("push", "origin", $tag)
 }
 
-Write-Host "Publishing installer and updater metadata to GitHub Releases..."
-$env:GH_TOKEN = $githubToken
-Invoke-CheckedCommand "npx.cmd" @("electron-builder", "--win", "--publish", "always")
+Write-Host "Building Windows installer and updater metadata locally..."
+Invoke-CheckedCommand "npx.cmd" @("electron-builder", "--win", "--publish", "never")
 
-$matchingReleases = @(
-  Get-GitHubReleases | Where-Object { $_.tag_name -eq $tag -or $_.tag_name -eq $version }
-)
-$completeReleases = @(
-  $matchingReleases | Where-Object {
-    $assets = @($_.assets | ForEach-Object { $_.name })
-    ($assets -contains "latest.yml") -and
-    (@($assets | Where-Object { $_ -match '-setup\.exe$' }).Count -gt 0)
-  } | Sort-Object -Property @{ Expression = { [DateTime]$_.created_at }; Descending = $true }
-)
-
-if ($completeReleases.Count -eq 0) {
-  throw "Release $tag does not contain both latest.yml and a Windows setup installer. No duplicate releases were removed."
+$metadataPath = Join-Path $repository "dist\latest.yml"
+$installerName = "{0}-{1}-setup.exe" -f $package.name, $version
+$installerPath = Join-Path $repository "dist\$installerName"
+$blockmapPath = "$installerPath.blockmap"
+foreach ($artifactPath in @($installerPath, $blockmapPath, $metadataPath)) {
+  if (-not (Test-Path -LiteralPath $artifactPath)) {
+    throw "The build did not generate $(Split-Path -Leaf $artifactPath). No GitHub releases were changed."
+  }
 }
 
-$releaseToKeep = $completeReleases[0]
+Write-Host "Checking generated latest.yml..."
+$metadataContent = Get-Content -LiteralPath $metadataPath -Raw
+if ($metadataContent -notmatch '(?m)^version:\s*["'']?([^"''\r\n]+)') {
+  throw "Could not read the version from dist\latest.yml. No GitHub releases were changed."
+}
+if ($Matches[1].Trim() -ne $version) {
+  throw "dist\latest.yml is for version $($Matches[1].Trim()), not $version. No GitHub releases were changed."
+}
+if ($metadataContent -notmatch '(?m)^\s+- url:\s*["'']?([^"''\r\n]+)') {
+  throw "Could not read the installer path from dist\latest.yml. No GitHub releases were changed."
+}
+if ($Matches[1].Trim() -ne $installerName) {
+  throw "dist\latest.yml references $($Matches[1].Trim()), not $installerName. No GitHub releases were changed."
+}
+
+$matchingReleases = @(Get-GitHubReleases | Where-Object { $_.tag_name -eq $tag -or $_.tag_name -eq $version })
+$releaseToKeep = $matchingReleases | Sort-Object -Property @{ Expression = { [DateTime]$_.created_at }; Descending = $true } | Select-Object -First 1
+if (-not $releaseToKeep) {
+  Write-Host "Creating a draft GitHub release for $tag..."
+  $releaseToKeep = Invoke-GitHubApi "Post" "https://api.github.com/repos/Jibhong/ma-order/releases" @{
+    tag_name = $tag
+    name = $version
+    draft = $true
+    prerelease = $version.Contains("-")
+  }
+}
+
+$releaseAssets = @(Invoke-GitHubApi "Get" "https://api.github.com/repos/Jibhong/ma-order/releases/$($releaseToKeep.id)/assets")
+foreach ($artifactPath in @($installerPath, $blockmapPath, $metadataPath)) {
+  $assetName = Split-Path -Leaf $artifactPath
+  $localDigest = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $existingAsset = $releaseAssets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
+  if ($existingAsset -and $existingAsset.digest -eq "sha256:$localDigest") {
+    Write-Host "$assetName is already attached with the correct contents."
+    continue
+  }
+  if ($existingAsset) {
+    Write-Host "Replacing $assetName on the GitHub release..."
+    Invoke-GitHubApi "Delete" "https://api.github.com/repos/Jibhong/ma-order/releases/assets/$($existingAsset.id)"
+  } else {
+    Write-Host "Attaching $assetName to the GitHub release..."
+  }
+  Upload-GitHubReleaseAsset $releaseToKeep $artifactPath $assetName | Out-Null
+}
+
+$releaseAssets = @(Invoke-GitHubApi "Get" "https://api.github.com/repos/Jibhong/ma-order/releases/$($releaseToKeep.id)/assets")
+$requiredAssetNames = @($installerName, "$installerName.blockmap", "latest.yml")
+$missingAssets = @($requiredAssetNames | Where-Object { $requiredName = $_; -not ($releaseAssets | Where-Object { $_.name -eq $requiredName }) })
+if ($missingAssets.Count -gt 0) {
+  throw "Release $tag is missing required assets: $($missingAssets -join ', '). Duplicate releases were not removed."
+}
+
 if ($releaseToKeep.draft) {
-  Write-Host "Publishing the complete draft release..."
+  Write-Host "Publishing the complete release..."
   Invoke-GitHubApi "Patch" "https://api.github.com/repos/Jibhong/ma-order/releases/$($releaseToKeep.id)" @{
     draft = $false
   } | Out-Null
 }
-Write-Host "Keeping GitHub release $($releaseToKeep.html_url) with its installer and latest.yml."
+Write-Host "Keeping GitHub release $($releaseToKeep.html_url) with its installer, blockmap, and latest.yml."
 foreach ($release in $matchingReleases) {
   if ($release.id -ne $releaseToKeep.id) {
     Write-Host "Removing duplicate GitHub release $($release.html_url)..."
