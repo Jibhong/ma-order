@@ -1,6 +1,6 @@
 {
   "name": "ma-order",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Stock management software",
   "main": "./out/main/index.js",
   "author": "Jibhong",
