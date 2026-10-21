@@ -83,7 +83,7 @@ const translations = {
     backupNow: "Create backup",
     loadBackup: "Load backup",
     checkUpdates: "Check for updates",
-    installUpdate: "Restart to install update",
+    update: "Update",
     loading: "Loading stock data...",
     add: "Add",
     remove: "Remove",
@@ -183,7 +183,7 @@ const translations = {
     backupNow: "สำรองข้อมูล",
     loadBackup: "โหลดข้อมูลสำรอง",
     checkUpdates: "ตรวจสอบการอัปเดต",
-    installUpdate: "เริ่มใหม่เพื่อติดตั้ง",
+    update: "อัปเดต",
     loading: "กำลังโหลดข้อมูลสต็อก...",
     add: "เพิ่ม",
     remove: "นำออก",
@@ -318,6 +318,13 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const unsubscribe = window.api.onUpdateStatus(setUpdateStatus)
+    if (!import.meta.env.DEV) {
+      void window.api
+        .checkForUpdates()
+        .catch((reason: unknown) =>
+          setUpdateStatus({ status: "error", message: errorMessage(reason) }),
+        )
+    }
     return unsubscribe
   }, [])
 
@@ -656,6 +663,14 @@ function App(): React.JSX.Element {
     }
   }
 
+  async function installUpdate(): Promise<void> {
+    try {
+      await window.api.installUpdate()
+    } catch (reason) {
+      setUpdateStatus({ status: "error", message: errorMessage(reason) })
+    }
+  }
+
   function updateMessage(status: UpdateStatus): string {
     switch (status.status) {
       case "checking":
@@ -704,6 +719,9 @@ function App(): React.JSX.Element {
           <span className="username-display">
             {text.username}: {state.settings.defaultUserName}
           </span>
+          <span className="muted">
+            {text.appVersion}: {appVersion}
+          </span>
           <button
             className="button secondary"
             onClick={() => {
@@ -713,8 +731,22 @@ function App(): React.JSX.Element {
           >
             {text.rename}
           </button>
-          <button className="button secondary" onClick={() => void checkUpdates()}>
-            {text.checkUpdates}
+          <button
+            className={`button ${updateStatus?.status === "downloaded" ? "primary" : "secondary"}`}
+            disabled={
+              updateStatus?.status === "checking" ||
+              updateStatus?.status === "available" ||
+              updateStatus?.status === "downloading"
+            }
+            onClick={() =>
+              void (updateStatus?.status === "downloaded" ? installUpdate() : checkUpdates())
+            }
+          >
+            {updateStatus?.status === "available" ||
+            updateStatus?.status === "downloading" ||
+            updateStatus?.status === "downloaded"
+              ? text.update
+              : text.checkUpdates}
           </button>
         </div>
       </header>
@@ -730,11 +762,6 @@ function App(): React.JSX.Element {
           role="status"
         >
           <span>{updateMessage(updateStatus)}</span>
-          {updateStatus.status === "downloaded" && (
-            <button className="button small" onClick={() => void window.api.installUpdate()}>
-              {text.installUpdate}
-            </button>
-          )}
         </div>
       )}
 
@@ -1162,9 +1189,6 @@ function App(): React.JSX.Element {
           <div className="section-heading">
             <div>
               <h2>{text.settings}</h2>
-              <span className="muted">
-                {text.appVersion}: {appVersion}
-              </span>
               <span className="muted">
                 {text.dataVersion}: {state.dataVersion}
               </span>

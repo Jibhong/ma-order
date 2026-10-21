@@ -1,5 +1,5 @@
 appId: com.jibhong.maorder
-productName: Stock Management
+productName: Ma Order
 directories:
   buildResources: build
 files:
