@@ -1,7 +1,7 @@
 {
   "name": "ma-order",
   "version": "1.0.0",
-  "description": "Local-first English and Thai stock management",
+  "description": "Stock management software",
   "main": "./out/main/index.js",
   "author": "Jibhong",
   "homepage": "https://github.com/Jibhong/ma-order",
@@ -27,7 +27,8 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "fuse.js": "^7.5.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.1",

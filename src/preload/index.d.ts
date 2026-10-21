@@ -1,5 +1,5 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
-import type { AppSettings, AppState, MovementType, UpdateStatus } from '../shared/types'
+import { ElectronAPI } from "@electron-toolkit/preload"
+import type { AppSettings, AppState, MovementType, UpdateStatus } from "../shared/types"
 
 declare global {
   interface Window {
@@ -9,12 +9,14 @@ declare global {
       getBackupLocation: () => Promise<string>
       openBackupFolder: () => Promise<void>
       addItem: (name: string) => Promise<AppState>
+      addLocation: (name: string) => Promise<AppState>
+      renameLocation: (locationId: string, name: string) => Promise<AppState>
       removeItem: (itemId: string) => Promise<AppState>
       moveStock: (
         itemId: string,
         type: MovementType,
         amount: number,
-        actor: string
+        actor: string,
       ) => Promise<AppState>
       updateSettings: (settings: AppSettings) => Promise<AppState>
       createBackup: () => Promise<string | null>
